@@ -72,7 +72,7 @@ Then **rotate** affected keys at each provider (NVIDIA, Nous, Stripe, Telegram, 
 
 **Please do not** open public GitHub issues for exploitable security bugs.
 
-1. Email or contact STRATIR maintainers privately with:
+1. Report privately via **[GitHub Security Advisories](https://github.com/AXRoux/signal-canvas/security/advisories/new)** or email **security@stratir.com** with:
    - Description and impact
    - Steps to reproduce
    - Affected version (app build date or git SHA)

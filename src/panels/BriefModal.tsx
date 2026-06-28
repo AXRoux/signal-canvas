@@ -78,7 +78,7 @@ export function BriefModal({ open, data, onClose }: BriefModalProps) {
 
                 <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
                   <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-2">
-                    Executive summary
+                    {copy.brief.executiveSummary}
                   </p>
                   <p className="text-[12px] text-[var(--color-text-primary)] leading-relaxed">
                     {data.executiveSummary}

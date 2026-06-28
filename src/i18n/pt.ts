@@ -79,6 +79,7 @@ export const pt: Translations = {
   },
   brief: {
     preview: "Brief Preview",
+    executiveSummary: "Resumo executivo",
     exportHint: "Exporte um memorando pronto para parceiros institucionais.",
     exportPdf: "Exportar PDF",
     exporting: "Exportando…",

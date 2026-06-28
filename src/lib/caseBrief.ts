@@ -27,16 +27,39 @@ function isOperationalNoise(text: string): boolean {
   return NOISE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
+function normalizeIndicatorLabel(label: string): string | null {
+  const normalized = label.trim().replace(/\s+/g, " ");
+  if (!normalized || /^off-platform migration$/i.test(normalized)) return null;
+  return normalized;
+}
+
+function eventIndicatorLabels(event: StreamEvent): string[] {
+  return [
+    ...new Set(
+      [...event.signals, ...detectGroomingSignals(event.text)]
+        .map(normalizeIndicatorLabel)
+        .filter((label): label is string => Boolean(label)),
+    ),
+  ];
+}
+
 function briefWorthyEvents(session: InvestigationSession): StreamEvent[] {
   return session.monitorStreams.telegram.filter((event) => {
     if (isOperationalNoise(event.text)) return false;
-    const hits = event.signals.length > 0 ? event.signals : detectGroomingSignals(event.text);
-    return hits.length > 0;
+    return eventIndicatorLabels(event).length > 0;
   });
 }
 
 function graphTelegramNodes(session: InvestigationSession) {
   return session.nodes.filter((n) => n.type === "telegram");
+}
+
+function graphIndicatorNodeCount(session: InvestigationSession): number {
+  return graphTelegramNodes(session).filter((node) =>
+    ((node.data as { signalTags?: string[] }).signalTags ?? []).some(
+      (tag) => normalizeIndicatorLabel(tag) !== null,
+    ),
+  ).length;
 }
 
 function senderLabel(node: InvestigationSession["nodes"][number]): string | null {
@@ -66,14 +89,16 @@ function chatLabels(session: InvestigationSession): string[] {
 function indicatorLabels(session: InvestigationSession): string[] {
   const labels = new Set<string>();
   for (const event of briefWorthyEvents(session)) {
-    for (const signal of event.signals) labels.add(signal);
-    for (const hit of detectGroomingSignals(event.text)) labels.add(hit);
+    for (const label of eventIndicatorLabels(event)) labels.add(label);
   }
   for (const node of graphTelegramNodes(session)) {
     const tags = (node.data as { signalTags?: string[] }).signalTags ?? [];
-    tags.forEach((tag) => labels.add(tag));
+    for (const tag of tags) {
+      const normalized = normalizeIndicatorLabel(tag);
+      if (normalized) labels.add(normalized);
+    }
   }
-  return [...labels].filter((label) => label && !/^off-platform migration$/i.test(label)).slice(0, 8);
+  return [...labels].slice(0, 8);
 }
 
 function evidenceHighlights(session: InvestigationSession, language: LanguageId, limit = 4): string[] {
@@ -84,9 +109,7 @@ function evidenceHighlights(session: InvestigationSession, language: LanguageId,
       const chat = event.chatTitle?.trim() || (en ? "Monitored channel" : "Canal monitorado");
       const sender = event.senderName?.trim() || (en ? "Unknown sender" : "Remetente desconhecido");
       const excerpt = event.text.replace(/\s+/g, " ").trim().slice(0, 140);
-      const indicators = [...new Set([...event.signals, ...detectGroomingSignals(event.text)])]
-        .slice(0, 3)
-        .join(", ");
+      const indicators = eventIndicatorLabels(event).slice(0, 3).join(", ");
       return indicators
         ? `${chat} · ${sender}: “${excerpt}” (${indicators})`
         : `${chat} · ${sender}: “${excerpt}”`;
@@ -94,27 +117,35 @@ function evidenceHighlights(session: InvestigationSession, language: LanguageId,
 }
 
 function buildRiskReview(session: InvestigationSession, language: LanguageId): RiskReview {
-  const tgNodes = graphTelegramNodes(session);
+  const graphSignalCount = graphIndicatorNodeCount(session);
   const indicators = indicatorLabels(session);
   const worthy = briefWorthyEvents(session);
   const streamCount = worthy.length;
 
   const summaryEn =
     indicators.length > 0
-      ? `Analyst review recommended. ${indicators.length} indicator type(s) observed across ${streamCount} substantive message(s) and ${tgNodes.length} mapped signal(s).`
+      ? streamCount > 0
+        ? `Analyst review recommended. ${indicators.length} indicator type(s) observed across ${streamCount} substantive message(s) and ${graphSignalCount} mapped signal(s).`
+        : `Analyst review recommended. ${indicators.length} indicator type(s) observed in ${graphSignalCount} mapped graph signal(s).`
       : streamCount > 0
         ? `Analyst review recommended. ${streamCount} substantive monitored message(s) require human assessment before any external action.`
         : `Monitoring in progress. No substantive indicator samples are ready for external briefing yet.`;
 
   const summaryPt =
     indicators.length > 0
-      ? `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${streamCount} mensagem(ns) substantiva(s) e ${tgNodes.length} sinal(is) mapeados.`
+      ? streamCount > 0
+        ? `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${streamCount} mensagem(ns) substantiva(s) e ${graphSignalCount} sinal(is) mapeados.`
+        : `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${graphSignalCount} sinal(is) mapeados no grafo.`
       : streamCount > 0
         ? `Revisão analítica recomendada. ${streamCount} mensagem(ns) monitorada(s) substantiva(s) requerem avaliação humana antes de qualquer ação externa.`
         : `Monitoramento em andamento. Ainda não há amostras substantivas prontas para brief externo.`;
 
+  const hasEvidence = indicators.length > 0 || streamCount > 0;
+
   return {
-    score: Math.min(92, 28 + indicators.length * 10 + Math.min(tgNodes.length, 6) * 4),
+    score: hasEvidence
+      ? Math.min(92, 28 + indicators.length * 10 + Math.min(graphSignalCount, 6) * 4)
+      : 0,
     confidence: indicators.length >= 2 ? "medium" : indicators.length === 1 ? "low" : "low",
     groomingIndicators: indicators,
     escalationTimeline: worthy.slice(0, 5).map((event) => ({
@@ -140,16 +171,22 @@ export function generateCaseBrief(session: InvestigationSession, language: Langu
   const highlights = evidenceHighlights(session, language);
   const worthyCount = briefWorthyEvents(session).length;
 
+  const graphCount = graphIndicatorNodeCount(session);
+
   const executiveSummaryEn =
     indicators.length > 0
-      ? `This memorandum summarizes human-reviewed digital protection findings for “${caseName}”. Analysts identified ${indicators.length} concern category(ies) across ${worthyCount} flagged communication(s)${chats.length ? ` in monitored channel(s) including ${chats.slice(0, 2).join(" and ")}` : ""}. Findings are preliminary and intended for institutional review only.`
+      ? worthyCount > 0
+        ? `This memorandum summarizes human-reviewed digital protection findings for “${caseName}”. Analysts identified ${indicators.length} concern category(ies) across ${worthyCount} flagged communication(s)${chats.length ? ` in monitored channel(s) including ${chats.slice(0, 2).join(" and ")}` : ""}. Findings are preliminary and intended for institutional review only.`
+        : `This memorandum summarizes human-reviewed digital protection findings for “${caseName}”. Analysts identified ${indicators.length} concern category(ies) from ${graphCount} mapped graph signal(s)${chats.length ? ` in monitored channel(s) including ${chats.slice(0, 2).join(" and ")}` : ""}. Findings are preliminary and intended for institutional review only.`
       : worthyCount > 0
         ? `This memorandum summarizes monitoring activity for “${caseName}”. ${worthyCount} communication(s) have been flagged for analyst review${chats.length ? ` across ${chats.length} monitored channel(s)` : ""}. No formal escalation is implied without human verification.`
         : `This memorandum documents the opening review scope for “${caseName}”. Monitoring is active${chats.length ? ` across ${chats.length} channel(s)` : ""}; substantive findings suitable for external sharing are not yet confirmed.`;
 
   const executiveSummaryPt =
     indicators.length > 0
-      ? `Este memorando resume achados de proteção digital revisados por analistas para “${caseName}”. Foram identificadas ${indicators.length} categoria(s) de preocupação em ${worthyCount} comunicação(ões) sinalizada(s)${chats.length ? ` em canais monitorados incluindo ${chats.slice(0, 2).join(" e ")}` : ""}. Os achados são preliminares e destinados apenas à revisão institucional.`
+      ? worthyCount > 0
+        ? `Este memorando resume achados de proteção digital revisados por analistas para “${caseName}”. Foram identificadas ${indicators.length} categoria(s) de preocupação em ${worthyCount} comunicação(ões) sinalizada(s)${chats.length ? ` em canais monitorados incluindo ${chats.slice(0, 2).join(" e ")}` : ""}. Os achados são preliminares e destinados apenas à revisão institucional.`
+        : `Este memorando resume achados de proteção digital revisados por analistas para “${caseName}”. Foram identificadas ${indicators.length} categoria(s) de preocupação a partir de ${graphCount} sinal(is) mapeados no grafo${chats.length ? ` em canais monitorados incluindo ${chats.slice(0, 2).join(" e ")}` : ""}. Os achados são preliminares e destinados apenas à revisão institucional.`
       : worthyCount > 0
         ? `Este memorando resume a atividade de monitoramento de “${caseName}”. ${worthyCount} comunicação(ões) foram sinalizadas para revisão analítica${chats.length ? ` em ${chats.length} canal(is) monitorado(s)` : ""}. Nenhuma escalada formal é implícita sem verificação humana.`
         : `Este memorando documenta o escopo inicial de revisão de “${caseName}”. O monitoramento está ativo${chats.length ? ` em ${chats.length} canal(is)` : ""}; achados substantivos prontos para compartilhamento externo ainda não foram confirmados.`;

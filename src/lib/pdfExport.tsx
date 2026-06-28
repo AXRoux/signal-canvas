@@ -6,7 +6,6 @@ import {
   StyleSheet,
   pdf,
 } from "@react-pdf/renderer";
-import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { isWeb } from "./platform";
 import type { BriefData } from "../store/types";
@@ -175,23 +174,20 @@ async function savePdfBytes(data: BriefData, uint8: Uint8Array): Promise<boolean
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = defaultPath;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
     return true;
   }
 
-  const filePath = await save({
-    defaultPath,
-    filters: [{ name: "PDF", extensions: ["pdf"] }],
-  });
-
-  if (!filePath) return false;
-
-  await invoke("write_export_file", {
-    path: filePath,
+  const savedPath = await invoke<string | null>("save_export_file", {
+    defaultName: defaultPath,
     contents: Array.from(uint8),
   });
-  return true;
+
+  return savedPath !== null;
 }
 
 export async function exportBriefPdf(data: BriefData): Promise<boolean> {

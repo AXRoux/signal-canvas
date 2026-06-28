@@ -67,6 +67,13 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
   );
 
   const nodeIds = useMemo(() => new Set(displayNodes.map((n) => n.id)), [displayNodes]);
+
+  useEffect(() => {
+    if (selectedNodeId && !nodeIds.has(selectedNodeId)) {
+      setSelectedNodeId(null);
+    }
+  }, [nodeIds, selectedNodeId, setSelectedNodeId]);
+
   const edges = useMemo(() => edgesForDisplayNodes(rawEdges, nodeIds), [rawEdges, nodeIds]);
 
   const flowNodes = useMemo(
