@@ -1,0 +1,44 @@
+{
+  "name": "signal-canvas",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:web": "VITE_PLATFORM=web tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "security:reset-secrets": "bash scripts/security-reset-local-secrets.sh",
+    "security:check": "bash scripts/check-repo-secrets.sh",
+    "deploy:release": "bash scripts/deploy-macos-release.sh",
+    "deploy:hermes": "bash scripts/deploy-hermes-cloudflare.sh",
+    "deploy:cloudflare": "echo 'Web app deploy removed — use npm run deploy:release for macOS DMG' && exit 1",
+    "setup:integrations": "bash scripts/setup-integrations.sh"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.3.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-fs": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@xyflow/react": "^12.11.0",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "framer-motion": "^12.23.12",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "^4.1.13",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

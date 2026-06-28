@@ -1,0 +1,65 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies & build output
+node_modules
+dist
+dist-ssr
+*.local
+src-tauri/target/
+*.dmg
+*.app.zip
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local operator data (never commit)
+.signal-canvas/
+auth.json
+integrations.json
+vault.enc
+workspace.db
+data-key.enc
+
+# Telegram MTProto sessions
+scripts/telegram/.venv/
+scripts/telegram/**/*.session
+scripts/telegram/**/*.session-journal
+*.session
+*.session-journal
+
+# Secrets & env files
+.env
+.env.*
+!.env.example
+!.env.apple.example
+.env.apple
+.env.local
+cloudflare/.dev.vars
+
+# Apple signing / notarization (never commit)
+*.p12
+*.p8
+*.mobileprovision
+AuthKey_*.p8
+
+# Cloudflare local state
+.wrangler/
+
+# Python
+__pycache__/
+*.py[cod]

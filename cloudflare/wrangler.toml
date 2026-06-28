@@ -1,0 +1,15 @@
+name = "signal-canvas"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "signal-canvas-releases"
+
+[vars]
+APP_VERSION = "0.1.0"
+HERMES_PUBLIC_URL = "https://signal-canvas.tethsiga.workers.dev/hermes"

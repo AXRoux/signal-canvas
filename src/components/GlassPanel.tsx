@@ -1,0 +1,13 @@
+import clsx from "clsx";
+import type { ReactNode } from "react";
+
+interface GlassPanelProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function GlassPanel({ children, className }: GlassPanelProps) {
+  return (
+    <div className={clsx("glass-panel", className)}>{children}</div>
+  );
+}
