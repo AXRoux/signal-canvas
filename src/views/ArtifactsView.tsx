@@ -88,8 +88,8 @@ export function ArtifactsView() {
                   Review brief
                 </p>
                 <h3 className="text-sm font-medium mt-1">{session.briefData!.title}</h3>
-                <p className="text-[11px] font-mono text-[var(--color-text-secondary)] mt-1">
-                  {session.briefData!.caseId}
+                <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+                  {session.briefData!.reference}
                 </p>
               </div>
               <button

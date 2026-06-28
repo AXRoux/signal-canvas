@@ -28,7 +28,7 @@ export function AboutSettingsPanel() {
       </div>
 
       <div className="text-[11px] text-[var(--color-text-tertiary)] leading-relaxed space-y-1">
-        <p>{copy.settings.aboutGateway}</p>
+        <p>{copy.settings.aboutStudio}</p>
         <p className="font-mono">{copy.settings.version}</p>
         <p>{copy.settings.aboutCopyright}</p>
       </div>

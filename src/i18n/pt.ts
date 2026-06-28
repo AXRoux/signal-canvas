@@ -79,7 +79,7 @@ export const pt: Translations = {
   },
   brief: {
     preview: "Brief Preview",
-    exportHint: "Exportar para revisão institucional",
+    exportHint: "Exporte um memorando pronto para parceiros institucionais.",
     exportPdf: "Exportar PDF",
     exporting: "Exportando…",
     saved: "PDF salvo com sucesso.",
@@ -98,11 +98,10 @@ export const pt: Translations = {
       "Signal Canvas é um desk macOS de investigação para equipes NGO/CSO que revisam grooming, migração e risco off-platform no Telegram e alvos OSINT.",
     aboutFeatures: [
       "Cofre de casos criptografado com grafo, auditoria e chat do agente por sessão",
-      "Gateway Hermes hospedado na infraestrutura STRATIR (sempre ativo via Cloudflare)",
       "BYOK para NVIDIA NIM e credenciais Telegram MTProto",
       "Build macOS assinado e notarizado com autenticação local do operador",
     ],
-    aboutGateway: "Endpoint Hermes: signal-canvas.tethsiga.workers.dev/hermes",
+    aboutStudio: "Produto open source do Stratir.com Applied AI Studio.",
     aboutCopyright: "© STRATIR · Signal Canvas",
     version: "Versão 0.1.0",
     close: "Concluir",
@@ -126,9 +125,9 @@ export const pt: Translations = {
     stratirDesc: "Link chart industrial — nós compactos, arestas tipadas, badges de agente.",
     flowsint: "Grafo de investigação",
     flowsintDesc:
-      "Grafo orbit — entidades circulares tipadas, multi-seleção por área, arestas STRATIR, badges Hermes.",
+      "Grafo orbit — entidades circulares tipadas, arraste para reposicionar, arestas STRATIR, badges Hermes.",
     flowsintHint:
-      "Arraste para selecionar · scroll para zoom · shift+clique multi-seleção · badge Hermes nos nós ativos",
+      "Arraste nós para mover · arraste o canvas para pan · scroll para zoom · clique para selecionar",
     layoutNote: "Trocar o layout reposiciona os nós. Conexões e evidências permanecem iguais.",
   },
   themes: {

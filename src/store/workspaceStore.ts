@@ -473,7 +473,7 @@ function applyScanResultToSession(
     edges: result.edges.map((e) => ({ ...e, type: "signal" as const, animated: true })),
     intelHits: result.intel,
     riskReview: result.riskReview,
-    briefData: result.brief,
+    briefData: null,
     workspaceName: result.workspaceName,
     caseName: result.caseName,
     scanLoaded: true,

@@ -79,7 +79,7 @@ export const en: Translations = {
   },
   brief: {
     preview: "Brief Preview",
-    exportHint: "Export for institutional review",
+    exportHint: "Export a polished memorandum for institutional partners.",
     exportPdf: "Export PDF",
     exporting: "Exporting…",
     saved: "PDF saved successfully.",
@@ -98,11 +98,10 @@ export const en: Translations = {
       "Signal Canvas is a macOS investigation desk for NGO and CSO teams reviewing grooming, migration, and off-platform risk on Telegram and OSINT targets.",
     aboutFeatures: [
       "Encrypted case vault with graph, audit trail, and agent chat per session",
-      "Hosted Hermes gateway on STRATIR infrastructure (always on via Cloudflare)",
       "BYOK for NVIDIA NIM and Telegram MTProto credentials",
       "Signed and notarized macOS build with local operator authentication",
     ],
-    aboutGateway: "Hermes endpoint: signal-canvas.tethsiga.workers.dev/hermes",
+    aboutStudio: "An open source product of Stratir.com Applied AI Studio.",
     aboutCopyright: "© STRATIR · Signal Canvas",
     version: "Version 0.1.0",
     close: "Done",
@@ -126,9 +125,9 @@ export const en: Translations = {
     stratirDesc: "Industrial link chart — compact signal nodes, typed edges, agent badges.",
     flowsint: "Investigation graph",
     flowsintDesc:
-      "Orbit graph — circular typed entities, marquee multi-select, STRATIR signal edges, Hermes badges.",
+      "Orbit graph — circular typed entities, drag to reposition, STRATIR signal edges, Hermes badges.",
     flowsintHint:
-      "Drag to select · scroll to zoom · shift-click multi-select · Hermes badge on active nodes",
+      "Drag nodes to move · drag canvas to pan · scroll to zoom · click to select",
     layoutNote: "Switching layout re-positions nodes on the canvas. Connections and evidence are unchanged.",
   },
   themes: {

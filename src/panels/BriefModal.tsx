@@ -23,7 +23,8 @@ export function BriefModal({ open, data, onClose }: BriefModalProps) {
     try {
       const saved = await exportBriefPdf(data);
       setExportStatus(saved ? copy.brief.saved : copy.brief.cancelled);
-    } catch {
+    } catch (err) {
+      console.error("[Signal Canvas] PDF export failed:", err);
       setExportStatus(copy.brief.error);
     } finally {
       setExporting(false);
@@ -70,10 +71,32 @@ export function BriefModal({ open, data, onClose }: BriefModalProps) {
               </div>
 
               <div className="flex-1 overflow-y-auto p-5 space-y-5">
-                <div className="flex gap-4 text-[11px] text-[var(--color-text-secondary)] font-mono">
-                  <span>{data.caseId}</span>
-                  <span>{data.generatedAt}</span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-secondary)]">
+                  <span>{data.reference}</span>
+                  <span>{data.generatedAtDisplay}</span>
                 </div>
+
+                <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-2">
+                    Executive summary
+                  </p>
+                  <p className="text-[12px] text-[var(--color-text-primary)] leading-relaxed">
+                    {data.executiveSummary}
+                  </p>
+                </section>
+
+                {data.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {data.keywords.map((kw) => (
+                      <span
+                        key={kw}
+                        className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {data.sections.map((section) => (
                   <section key={section.title}>
@@ -81,9 +104,9 @@ export function BriefModal({ open, data, onClose }: BriefModalProps) {
                       {section.title}
                     </h3>
                     <ul className="space-y-1.5">
-                      {section.items.map((item) => (
+                      {section.items.map((item, index) => (
                         <li
-                          key={item}
+                          key={`${section.title}-${index}`}
                           className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed pl-3 border-l-2 border-[var(--color-border)]"
                         >
                           {item}
@@ -95,17 +118,6 @@ export function BriefModal({ open, data, onClose }: BriefModalProps) {
 
                 <div className="human-review-badge rounded-xl p-4">
                   <p className="text-[11px] leading-relaxed">{data.reviewerNotes}</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {data.keywords.map((kw) => (
-                    <span
-                      key={kw}
-                      className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-                    >
-                      {kw}
-                    </span>
-                  ))}
                 </div>
               </div>
 

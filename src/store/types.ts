@@ -118,8 +118,11 @@ export interface BriefSection {
 
 export interface BriefData {
   title: string;
+  reference: string;
   caseId: string;
   generatedAt: string;
+  generatedAtDisplay: string;
+  executiveSummary: string;
   reviewerNotes: string;
   sections: BriefSection[];
   linkedAccounts: string[];

@@ -48,18 +48,20 @@ export function flowsintNodeSummary(node: Node): string {
 export function toFlowsintFlowNodes(
   nodes: Node[],
   options: {
-    selectionIds: Set<string>;
+    selectedNodeId: string | null;
+    positionOverrides?: Map<string, { x: number; y: number }>;
   },
 ): Node[] {
   return nodes.map((node, index) => {
     const typeKey = flowsintTypeKey(node);
-    const position = ensureFlowPosition(node, index);
+    const position = options.positionOverrides?.get(node.id) ?? ensureFlowPosition(node, index);
 
     return {
       ...node,
       type: "flowsintEntity",
       position,
-      selected: options.selectionIds.has(node.id),
+      selected: options.selectedNodeId === node.id,
+      draggable: true,
       data: {
         ...(node.data ?? {}),
         label: String((node.data as { label?: string })?.label ?? node.id),

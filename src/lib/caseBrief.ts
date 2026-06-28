@@ -1,46 +1,128 @@
 import type { LanguageId } from "../i18n/types";
-import type { BriefData, InvestigationSession, RiskReview } from "../store/types";
+import { detectGroomingSignals } from "./groomingLexicon";
+import type { BriefData, InvestigationSession, RiskReview, StreamEvent } from "../store/types";
 
-function caseId(session: InvestigationSession) {
-  return `SC-${session.id.slice(0, 8).toUpperCase()}`;
+const NOISE_PATTERNS = [
+  /login code/i,
+  /web login code/i,
+  /do not give this code/i,
+  /my\.telegram\.org/i,
+  /two-step verification/i,
+  /telegram code/i,
+  /this code can be used to log in/i,
+  /dear .+, we received a request/i,
+];
+
+function formatBriefDate(iso: string, language: LanguageId): string {
+  return new Date(iso).toLocaleDateString(language === "pt" ? "pt-BR" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function isOperationalNoise(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  return NOISE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+function briefWorthyEvents(session: InvestigationSession): StreamEvent[] {
+  return session.monitorStreams.telegram.filter((event) => {
+    if (isOperationalNoise(event.text)) return false;
+    const hits = event.signals.length > 0 ? event.signals : detectGroomingSignals(event.text);
+    return hits.length > 0;
+  });
+}
+
+function graphTelegramNodes(session: InvestigationSession) {
+  return session.nodes.filter((n) => n.type === "telegram");
+}
+
+function senderLabel(node: InvestigationSession["nodes"][number]): string | null {
+  const data = node.data as {
+    senderName?: string;
+    label?: string;
+    chatTitle?: string;
+    snippet?: string;
+  };
+  const name = data.senderName?.trim() || data.label?.trim();
+  if (!name || name.length < 2) return null;
+  if (/^r\*$/i.test(name)) return null;
+  if (isOperationalNoise(name)) return null;
+  return name;
+}
+
+function chatLabels(session: InvestigationSession): string[] {
+  const fromMonitor = session.telegram.monitoredChats
+    .map((c) => c.title?.trim())
+    .filter((title): title is string => !!title && title.toLowerCase() !== "null");
+  const fromGraph = graphTelegramNodes(session)
+    .map((n) => (n.data as { chatTitle?: string }).chatTitle?.trim())
+    .filter((title): title is string => !!title && title.toLowerCase() !== "null");
+  return [...new Set([...fromMonitor, ...fromGraph])];
+}
+
+function indicatorLabels(session: InvestigationSession): string[] {
+  const labels = new Set<string>();
+  for (const event of briefWorthyEvents(session)) {
+    for (const signal of event.signals) labels.add(signal);
+    for (const hit of detectGroomingSignals(event.text)) labels.add(hit);
+  }
+  for (const node of graphTelegramNodes(session)) {
+    const tags = (node.data as { signalTags?: string[] }).signalTags ?? [];
+    tags.forEach((tag) => labels.add(tag));
+  }
+  return [...labels].filter((label) => label && !/^off-platform migration$/i.test(label)).slice(0, 8);
+}
+
+function evidenceHighlights(session: InvestigationSession, language: LanguageId, limit = 4): string[] {
+  const en = language !== "pt";
+  return briefWorthyEvents(session)
+    .slice(0, limit)
+    .map((event) => {
+      const chat = event.chatTitle?.trim() || (en ? "Monitored channel" : "Canal monitorado");
+      const sender = event.senderName?.trim() || (en ? "Unknown sender" : "Remetente desconhecido");
+      const excerpt = event.text.replace(/\s+/g, " ").trim().slice(0, 140);
+      const indicators = [...new Set([...event.signals, ...detectGroomingSignals(event.text)])]
+        .slice(0, 3)
+        .join(", ");
+      return indicators
+        ? `${chat} · ${sender}: “${excerpt}” (${indicators})`
+        : `${chat} · ${sender}: “${excerpt}”`;
+    });
 }
 
 function buildRiskReview(session: InvestigationSession, language: LanguageId): RiskReview {
-  const tgNodes = session.nodes.filter((n) => n.type === "telegram");
-  const signals = new Set<string>();
-  for (const n of tgNodes) {
-    const tags = (n.data as { signalTags?: string[] }).signalTags ?? [];
-    tags.forEach((t) => signals.add(t));
-  }
-  for (const e of session.monitorStreams.telegram) {
-    e.signals.forEach((s) => signals.add(s));
-  }
-  const indicators = [...signals].slice(0, 8);
-  const streamCount = session.monitorStreams.telegram.length;
-  const monitored = session.telegram.monitoredChats.map((c) => c.title).join(", ");
+  const tgNodes = graphTelegramNodes(session);
+  const indicators = indicatorLabels(session);
+  const worthy = briefWorthyEvents(session);
+  const streamCount = worthy.length;
 
   const summaryEn =
     indicators.length > 0
-      ? `Human review required. ${tgNodes.length} Telegram signal(s) on graph; ${streamCount} monitored message(s). Lexicon hits: ${indicators.join(", ")}.`
-      : `Human review required. Case "${session.title}" has ${streamCount} Telegram observation(s) across ${session.telegram.monitoredChats.length} chat(s). No lexicon hits yet — continue monitoring.`;
+      ? `Analyst review recommended. ${indicators.length} indicator type(s) observed across ${streamCount} substantive message(s) and ${tgNodes.length} mapped signal(s).`
+      : streamCount > 0
+        ? `Analyst review recommended. ${streamCount} substantive monitored message(s) require human assessment before any external action.`
+        : `Monitoring in progress. No substantive indicator samples are ready for external briefing yet.`;
 
   const summaryPt =
     indicators.length > 0
-      ? `Revisão humana necessária. ${tgNodes.length} sinal(is) Telegram no grafo; ${streamCount} mensagem(ns) monitorada(s). Indicadores: ${indicators.join(", ")}.`
-      : `Revisão humana necessária. Caso "${session.title}" com ${streamCount} observação(ões) Telegram em ${session.telegram.monitoredChats.length} chat(s). Sem indicadores léxicos ainda — continuar monitoramento.`;
+      ? `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${streamCount} mensagem(ns) substantiva(s) e ${tgNodes.length} sinal(is) mapeados.`
+      : streamCount > 0
+        ? `Revisão analítica recomendada. ${streamCount} mensagem(ns) monitorada(s) substantiva(s) requerem avaliação humana antes de qualquer ação externa.`
+        : `Monitoramento em andamento. Ainda não há amostras substantivas prontas para brief externo.`;
 
   return {
-    score: Math.min(95, 35 + indicators.length * 8 + tgNodes.length * 5),
-    confidence: indicators.length >= 2 ? "medium" : "low",
+    score: Math.min(92, 28 + indicators.length * 10 + Math.min(tgNodes.length, 6) * 4),
+    confidence: indicators.length >= 2 ? "medium" : indicators.length === 1 ? "low" : "low",
     groomingIndicators: indicators,
-    escalationTimeline: session.monitorStreams.telegram.slice(0, 5).map((m) => ({
-      time: m.observedAt,
-      label: m.chatTitle,
-      detail: m.text.slice(0, 120),
+    escalationTimeline: worthy.slice(0, 5).map((event) => ({
+      time: event.observedAt,
+      label: event.chatTitle?.trim() || "Telegram",
+      detail: event.text.replace(/\s+/g, " ").trim().slice(0, 120),
     })),
-    offPlatformNotes: monitored
-      ? [`Monitored Telegram: ${monitored}`]
-      : ["Configure Telegram monitoring in the Telegram tab."],
+    offPlatformNotes: [],
     languagesDetected: language === "pt" ? ["pt-BR"] : ["en"],
     summary: language === "pt" ? summaryPt : summaryEn,
   };
@@ -48,77 +130,104 @@ function buildRiskReview(session: InvestigationSession, language: LanguageId): R
 
 export function generateCaseBrief(session: InvestigationSession, language: LanguageId): BriefData {
   const generatedAt = new Date().toISOString();
-  const tgNodes = session.nodes.filter((n) => n.type === "telegram");
-  const senders = [
-    ...new Set(
-      tgNodes.map((n) => (n.data as { senderName?: string; label?: string }).senderName ?? (n.data as { label?: string }).label).filter(Boolean),
-    ),
-  ] as string[];
-  const chats = session.telegram.monitoredChats.map((c) => c.title);
-  const signalSamples = session.monitorStreams.telegram
-    .filter((m) => m.signals.length > 0)
-    .slice(0, 5)
-    .map((m) => `[${m.chatTitle}] ${m.senderName ?? "unknown"}: ${m.text.slice(0, 100)}`);
-
   const en = language !== "pt";
-  const title = en
-    ? `Institutional review brief · ${session.title}`
-    : `Brief institucional · ${session.title}`;
+  const caseName = session.caseName?.trim() || session.title.trim();
+  const chats = chatLabels(session);
+  const senders = [
+    ...new Set(graphTelegramNodes(session).map(senderLabel).filter(Boolean)),
+  ] as string[];
+  const indicators = indicatorLabels(session);
+  const highlights = evidenceHighlights(session, language);
+  const worthyCount = briefWorthyEvents(session).length;
+
+  const executiveSummaryEn =
+    indicators.length > 0
+      ? `This memorandum summarizes human-reviewed digital protection findings for “${caseName}”. Analysts identified ${indicators.length} concern category(ies) across ${worthyCount} flagged communication(s)${chats.length ? ` in monitored channel(s) including ${chats.slice(0, 2).join(" and ")}` : ""}. Findings are preliminary and intended for institutional review only.`
+      : worthyCount > 0
+        ? `This memorandum summarizes monitoring activity for “${caseName}”. ${worthyCount} communication(s) have been flagged for analyst review${chats.length ? ` across ${chats.length} monitored channel(s)` : ""}. No formal escalation is implied without human verification.`
+        : `This memorandum documents the opening review scope for “${caseName}”. Monitoring is active${chats.length ? ` across ${chats.length} channel(s)` : ""}; substantive findings suitable for external sharing are not yet confirmed.`;
+
+  const executiveSummaryPt =
+    indicators.length > 0
+      ? `Este memorando resume achados de proteção digital revisados por analistas para “${caseName}”. Foram identificadas ${indicators.length} categoria(s) de preocupação em ${worthyCount} comunicação(ões) sinalizada(s)${chats.length ? ` em canais monitorados incluindo ${chats.slice(0, 2).join(" e ")}` : ""}. Os achados são preliminares e destinados apenas à revisão institucional.`
+      : worthyCount > 0
+        ? `Este memorando resume a atividade de monitoramento de “${caseName}”. ${worthyCount} comunicação(ões) foram sinalizadas para revisão analítica${chats.length ? ` em ${chats.length} canal(is) monitorado(s)` : ""}. Nenhuma escalada formal é implícita sem verificação humana.`
+        : `Este memorando documenta o escopo inicial de revisão de “${caseName}”. O monitoramento está ativo${chats.length ? ` em ${chats.length} canal(is)` : ""}; achados substantivos prontos para compartilhamento externo ainda não foram confirmados.`;
 
   return {
-    title,
-    caseId: caseId(session),
+    title: en
+      ? `Investigation memorandum · ${caseName}`
+      : `Memorando de investigação · ${caseName}`,
+    reference: en
+      ? `${caseName} · ${formatBriefDate(generatedAt, language)}`
+      : `${caseName} · ${formatBriefDate(generatedAt, language)}`,
+    caseId: caseName.replace(/[^\w.-]+/g, "-").slice(0, 48) || "case",
     generatedAt,
+    generatedAtDisplay: formatBriefDate(generatedAt, language),
+    executiveSummary: en ? executiveSummaryEn : executiveSummaryPt,
     reviewerNotes: en
-      ? "Prepared for NGO/CSO human review. Not automated enforcement. Verify all findings with primary sources."
-      : "Preparado para revisão humana institucional. Não é aplicação automatizada. Verifique achados nas fontes primárias.",
+      ? "Prepared for institutional review by trained analysts. This document does not constitute legal advice, automated enforcement, or permission to contact subjects. Verify all findings against primary sources before external distribution."
+      : "Preparado para revisão institucional por analistas qualificados. Este documento não constitui assessoria jurídica, aplicação automatizada ou autorização para contatar sujeitos. Verifique todos os achados nas fontes primárias antes da distribuição externa.",
     sections: [
       {
-        title: en ? "Case scope" : "Escopo do caso",
+        title: en ? "Scope of review" : "Escopo da revisão",
         items: [
-          en ? `Case: ${session.title}` : `Caso: ${session.title}`,
-          en ? `Monitored chats: ${chats.length ? chats.join("; ") : "none yet"}` : `Chats monitorados: ${chats.length ? chats.join("; ") : "nenhum ainda"}`,
-          en ? `Graph nodes: ${session.nodes.length} (${tgNodes.length} Telegram)` : `Nós no grafo: ${session.nodes.length} (${tgNodes.length} Telegram)`,
-          en ? `Live stream events: ${session.monitorStreams.telegram.length}` : `Eventos ao vivo: ${session.monitorStreams.telegram.length}`,
+          en
+            ? `Subject case: ${caseName}`
+            : `Caso: ${caseName}`,
+          chats.length
+            ? en
+              ? `Channels under monitoring: ${chats.join(", ")}`
+              : `Canais monitorados: ${chats.join(", ")}`
+            : en
+              ? "Channels under monitoring: pending analyst configuration"
+              : "Canais monitorados: pendente configuração analítica",
+          en
+            ? `Mapped signals on review graph: ${graphTelegramNodes(session).length}`
+            : `Sinais mapeados no grafo de revisão: ${graphTelegramNodes(session).length}`,
         ],
       },
       {
-        title: en ? "Observations" : "Observações",
+        title: en ? "Key findings" : "Principais achados",
         items:
-          signalSamples.length > 0
-            ? signalSamples
+          highlights.length > 0
+            ? highlights
             : [
                 en
-                  ? "No flagged lexicon samples yet. Add Telegram messages to the graph or continue monitoring."
-                  : "Sem amostras léxicas sinalizadas. Adicione mensagens ao grafo ou continue o monitoramento.",
+                  ? "No substantive flagged communications are available for external briefing at this time. Continue monitoring and map relevant messages to the review graph."
+                  : "Não há comunicações substantivas sinalizadas disponíveis para brief externo neste momento. Continue o monitoramento e mapeie mensagens relevantes no grafo de revisão.",
               ],
       },
       {
-        title: en ? "Entities of interest" : "Entidades de interesse",
+        title: en ? "Parties of interest" : "Partes de interesse",
         items:
           senders.length > 0
-            ? senders.slice(0, 8)
-            : [en ? "Derive entities by adding stream messages to the graph." : "Derive entidades adicionando mensagens ao grafo."],
+            ? senders.slice(0, 6).map((sender) => (en ? `Observed actor: ${sender}` : `Ator observado: ${sender}`))
+            : [
+                en
+                  ? "No verified actors have been designated for external disclosure yet."
+                  : "Nenhum ator verificado foi designado para divulgação externa ainda.",
+              ],
       },
       {
-        title: en ? "Recommended next steps" : "Próximos passos",
+        title: en ? "Recommended actions" : "Ações recomendadas",
         items: en
           ? [
-              "Continue Telegram live monitoring on selected chats.",
-              "Connect related senders on the graph (manual edges).",
-              "Run Hermes tasks on selected nodes for structured follow-ups.",
-              "Escalate via institutional review — do not contact subjects from this console.",
+              "Complete human review of flagged communications against primary sources.",
+              "Document chain-of-custody for any evidence selected for referral.",
+              "Coordinate escalation through institutional partners — do not contact subjects from this console.",
+              "Update this memorandum after additional monitoring or graph correlation.",
             ]
           : [
-              "Continuar monitoramento ao vivo nos chats selecionados.",
-              "Conectar remetentes relacionados no grafo (arestas manuais).",
-              "Executar tarefas Hermes em nós selecionados.",
-              "Escalar via revisão institucional — não contatar sujeitos a partir deste console.",
+              "Concluir revisão humana das comunicações sinalizadas com fontes primárias.",
+              "Documentar cadeia de custódia de evidências selecionadas para encaminhamento.",
+              "Coordenar escalada via parceiros institucionais — não contatar sujeitos a partir deste console.",
+              "Atualizar este memorando após monitoramento adicional ou correlação no grafo.",
             ],
       },
     ],
     linkedAccounts: senders,
-    keywords: [...new Set(session.monitorStreams.telegram.flatMap((m) => m.signals))].slice(0, 12),
+    keywords: indicators,
   };
 }
 

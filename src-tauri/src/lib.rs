@@ -20,6 +20,11 @@ use telegram::{
     TelegramMonitorState,
 };
 
+#[tauri::command]
+fn write_export_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    std::fs::write(path, contents).map_err(|e| e.to_string())
+}
+
 fn focus_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -66,6 +71,7 @@ pub fn run() {
             secure_vault_load,
             secure_vault_save,
             secure_migrate_legacy,
+            write_export_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

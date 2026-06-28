@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
 import {
   Background,
@@ -7,11 +7,9 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  SelectionMode,
   useReactFlow,
   type NodeChange,
   type NodeMouseHandler,
-  type OnSelectionChangeFunc,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useI18n } from "../../hooks/useI18n";
@@ -28,6 +26,7 @@ import {
   toFlowsintFlowNodes,
 } from "./flowsintFlowData";
 import { nodeTypeColor } from "./flowsintColors";
+import { nodesNeedFlowsintLayout } from "../../lib/flowsintLayout";
 import { reactFlowColorMode } from "../../lib/themes";
 
 const nodeTypes = { flowsintEntity: FlowsintEntityNode };
@@ -37,11 +36,11 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
   const copy = useI18n();
   const { fitView } = useReactFlow();
   const fitKeyRef = useRef("");
-  const [selectionIds, setSelectionIds] = useState<Set<string>>(new Set());
 
   const displayNodes = useSessionSelector((s) => flowsintDisplayNodes(s), []);
   const rawEdges = useSessionSelector((s) => s.edges, []);
   const watchlist = useSessionSelector((s) => s.watchlist, []);
+  const selectedNodeId = useSessionSelector((s) => s.selectedNodeId, null);
   const agentRunning = useWorkspaceStore((s) => s.agentRunning);
   const theme = useWorkspaceStore((s) => s.theme);
   const flowColorMode = reactFlowColorMode(theme);
@@ -51,6 +50,11 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
   const onConnect = useWorkspaceStore((s) => s.onConnect);
   const setSelectedNodeId = useWorkspaceStore((s) => s.setSelectedNodeId);
   const ensureFlowsintLayout = useWorkspaceStore((s) => s.ensureFlowsintLayout);
+
+  const needsLayout = useMemo(
+    () => nodesNeedFlowsintLayout(displayNodes),
+    [displayNodes],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -66,38 +70,25 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
   const edges = useMemo(() => edgesForDisplayNodes(rawEdges, nodeIds), [rawEdges, nodeIds]);
 
   const flowNodes = useMemo(
-    () => toFlowsintFlowNodes(displayNodes, { selectionIds }),
-    [displayNodes, selectionIds],
+    () => toFlowsintFlowNodes(displayNodes, { selectedNodeId }),
+    [displayNodes, selectedNodeId],
   );
 
   const flowEdges = useMemo(() => toFlowsintFlowEdges(edges, nodeIds), [edges, nodeIds]);
 
   const showEmpty = displayNodes.length === 0 && !agentRunning;
 
-  const onSelectionChange: OnSelectionChangeFunc = useCallback(
-    ({ nodes }) => {
-      const ids = new Set(nodes.map((n) => n.id));
-      setSelectionIds(ids);
-      const focus = nodes.length > 0 ? nodes[nodes.length - 1]?.id ?? null : null;
-      setSelectedNodeId(focus);
-    },
-    [setSelectedNodeId],
-  );
-
   const onNodeClick: NodeMouseHandler = useCallback(
     (_, node) => setSelectedNodeId(node.id),
     [setSelectedNodeId],
   );
 
-  const onPaneClick = useCallback(() => {
-    setSelectionIds(new Set());
-    setSelectedNodeId(null);
-  }, [setSelectedNodeId]);
+  const onPaneClick = useCallback(() => setSelectedNodeId(null), [setSelectedNodeId]);
 
   useEffect(() => {
-    if (showEmpty) return;
+    if (showEmpty || !needsLayout) return;
     ensureFlowsintLayout();
-  }, [displayNodes, ensureFlowsintLayout, showEmpty]);
+  }, [ensureFlowsintLayout, needsLayout, showEmpty]);
 
   useEffect(() => {
     const key = displayNodes.map((n) => n.id).join(",");
@@ -107,14 +98,6 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
       void fitView({ padding: 0.28, duration: 320 });
     });
   }, [displayNodes, fitView, showEmpty]);
-
-  useEffect(() => {
-    const valid = new Set(displayNodes.map((n) => n.id));
-    setSelectionIds((prev) => {
-      const next = new Set([...prev].filter((id) => valid.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [displayNodes]);
 
   return (
     <GraphStyleContext.Provider value="flowsint">
@@ -138,7 +121,6 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
-            onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             proOptions={{ hideAttribution: true }}
@@ -149,12 +131,14 @@ function FlowsintGraphInner({ compact = false }: { compact?: boolean }) {
             nodesDraggable
             nodesConnectable
             elementsSelectable
-            selectionOnDrag
-            panOnDrag={[1, 2]}
-            selectionMode={SelectionMode.Partial}
-            connectOnClick
+            selectNodesOnDrag={false}
+            selectionOnDrag={false}
+            panOnDrag
             panOnScroll
             zoomOnScroll
+            multiSelectionKeyCode="Shift"
+            nodeDragThreshold={2}
+            connectOnClick
             snapToGrid
             snapGrid={[24, 24]}
           >

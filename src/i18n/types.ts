@@ -92,7 +92,7 @@ export interface Translations {
     aboutTagline: string;
     aboutDesc: string;
     aboutFeatures: string[];
-    aboutGateway: string;
+    aboutStudio: string;
     aboutCopyright: string;
     version: string;
     close: string;

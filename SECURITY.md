@@ -1,44 +1,91 @@
-# Security
+# Security Policy
 
-Signal Canvas is designed to be **open source with zero secrets in git**. All operator credentials live on the device or in Cloudflare Worker secrets — never in this repository.
+Signal Canvas is designed to be **open source with zero secrets in git**. This document describes how we protect operator data, what must never be committed, and how to report vulnerabilities.
+
+## Scope
+
+| In scope | Out of scope |
+|----------|----------------|
+| Signal Canvas desktop app (Tauri/Rust) | Third-party Telegram, NVIDIA, or Stripe platform bugs |
+| Encrypted local vault and session storage | Compromise of operator machine outside the app |
+| Cloudflare Worker download + Hermes gateway | Social engineering of analysts |
+
+## Threat model (summary)
+
+- **Operator device** is the trust boundary. Passcodes and encryption keys protect case data at rest.
+- **API keys** are BYOK — analysts supply NVIDIA, Telegram, and optional Nous/Stripe credentials; these are encrypted locally, not sent to our git repo.
+- **Hosted Hermes gateway** authenticates the app with a public gateway identifier; inference uses the analyst's NVIDIA key passed per request.
+- **No cloud sync of case vault** in v0.1.0 — sessions stay on disk under `~/.signal-canvas/`.
 
 ## Never commit
 
-| Item | Where it lives instead |
-|------|------------------------|
-| NVIDIA API key (`nvapi-...`) | Settings → NVIDIA, encrypted `~/.signal-canvas/integrations.json` |
-| Nous / Hermes key (`sk-...`) | Settings → Hermes, same encrypted file |
-| Stripe secret key (`sk_test_...`, `sk_live_...`) | Settings → Stripe, same encrypted file |
-| Telegram API ID / hash | Settings → Telegram, same encrypted file |
-| Telegram `.session` files | `~/.signal-canvas/telegram/` (gitignored locally) |
-| Operator passcodes / password hashes | `~/.signal-canvas/auth.json` (local only) |
-| Case vault / session DB | `~/.signal-canvas/vault.enc`, `workspace.db`, `data-key.enc` |
-| Apple notarization credentials | `.env.apple` (copy from `.env.apple.example`) |
-| Cloudflare Worker secrets | `wrangler secret put` (`HERMES_GATEWAY_KEY`, `NVIDIA_API_KEY`, etc.) |
+| Secret | Where it lives |
+|--------|----------------|
+| NVIDIA API key (`nvapi-...`) | Settings → NVIDIA → encrypted `integrations.json` |
+| Nous / Hermes key (`sk-...`) | Settings → Hermes → same file |
+| Stripe secret (`sk_test_...`, `sk_live_...`) | Settings → Stripe → same file |
+| Telegram API ID / hash | Settings → Telegram → same file |
+| Telegram `.session` files | `~/.signal-canvas/telegram/` |
+| Operator passcodes / hashes | `~/.signal-canvas/auth.json` |
+| Case vault / DB | `vault.enc`, `workspace.db`, `data-key.enc` |
+| Apple notarization credentials | `.env.apple` (from `.env.apple.example`) |
+| Cloudflare Worker secrets | `wrangler secret put HERMES_GATEWAY_KEY`, `NVIDIA_API_KEY`, etc. |
 
-## Safe in the repo
+## Safe in the repository
 
-- Placeholder strings in docs (`nvapi-...`, `sk_test_...`, `API_SERVER_KEY=your_key`)
-- Hosted gateway identifier `signal-canvas-prod-gateway` (public app auth, not a personal key)
-- Apple Team ID in examples (public signing metadata)
-- Worker URLs and R2 bucket names
+- Documentation placeholders (`nvapi-...`, `sk_test_...`)
+- Public gateway identifier `signal-canvas-prod-gateway` (app auth, not a personal key)
+- Worker URLs, R2 bucket names, Apple Team ID in examples
+- Signed release artifacts uploaded to R2 (not stored in git)
 
-## Before you push
+## Developer checks
+
+Before every commit or push:
 
 ```bash
 npm run security:check
 ```
 
-This scans staged files for common secret patterns and blocked paths.
+This script fails if blocked paths are tracked or common secret patterns appear in source.
 
-If you ever paste a key into chat, a screenshot, or git history:
+If keys were pasted into chat, a screenshot, or git history:
 
 ```bash
 npm run security:reset-secrets
 ```
 
-Then rotate the key at the provider (NVIDIA, Nous, Stripe, Telegram, Apple).
+Then **rotate** affected keys at each provider (NVIDIA, Nous, Stripe, Telegram, Apple).
 
-## Reporting
+## Local data locations (macOS)
 
-For security issues related to Signal Canvas, contact the STRATIR maintainers privately before opening a public issue with exploit details.
+```
+~/.signal-canvas/
+├── auth.json              # operator accounts (hashed passcodes)
+├── integrations.json      # encrypted API keys
+├── workspace.db           # encrypted case sessions
+├── data-key.enc           # passcode-wrapped encryption key
+├── vault.enc              # legacy vault (migrated to workspace.db)
+└── telegram/              # MTProto session files
+```
+
+## Reporting a vulnerability
+
+**Please do not** open public GitHub issues for exploitable security bugs.
+
+1. Email or contact STRATIR maintainers privately with:
+   - Description and impact
+   - Steps to reproduce
+   - Affected version (app build date or git SHA)
+   - Your environment (macOS version, if relevant)
+2. Allow reasonable time for a fix before public disclosure.
+3. We will acknowledge receipt and share remediation timeline when possible.
+
+## Secure release process
+
+- macOS builds are **Developer ID signed** and **notarized** before R2 upload.
+- Release script: `npm run deploy:release` (requires `.env.apple`, never committed).
+- Download worker serves stapled DMG from R2 only — no secrets in the worker bundle.
+
+## Acknowledgments
+
+We appreciate responsible disclosure from researchers and operators who help keep institutional review tools trustworthy.
