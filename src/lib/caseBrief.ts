@@ -54,6 +54,14 @@ function graphTelegramNodes(session: InvestigationSession) {
   return session.nodes.filter((n) => n.type === "telegram");
 }
 
+function graphIndicatorNodeCount(session: InvestigationSession): number {
+  return graphTelegramNodes(session).filter((node) =>
+    ((node.data as { signalTags?: string[] }).signalTags ?? []).some(
+      (tag) => normalizeIndicatorLabel(tag) !== null,
+    ),
+  ).length;
+}
+
 function senderLabel(node: InvestigationSession["nodes"][number]): string | null {
   const data = node.data as {
     senderName?: string;
@@ -109,7 +117,7 @@ function evidenceHighlights(session: InvestigationSession, language: LanguageId,
 }
 
 function buildRiskReview(session: InvestigationSession, language: LanguageId): RiskReview {
-  const tgNodes = graphTelegramNodes(session);
+  const graphSignalCount = graphIndicatorNodeCount(session);
   const indicators = indicatorLabels(session);
   const worthy = briefWorthyEvents(session);
   const streamCount = worthy.length;
@@ -117,8 +125,8 @@ function buildRiskReview(session: InvestigationSession, language: LanguageId): R
   const summaryEn =
     indicators.length > 0
       ? streamCount > 0
-        ? `Analyst review recommended. ${indicators.length} indicator type(s) observed across ${streamCount} substantive message(s) and ${tgNodes.length} mapped signal(s).`
-        : `Analyst review recommended. ${indicators.length} indicator type(s) observed in ${tgNodes.length} mapped graph signal(s).`
+        ? `Analyst review recommended. ${indicators.length} indicator type(s) observed across ${streamCount} substantive message(s) and ${graphSignalCount} mapped signal(s).`
+        : `Analyst review recommended. ${indicators.length} indicator type(s) observed in ${graphSignalCount} mapped graph signal(s).`
       : streamCount > 0
         ? `Analyst review recommended. ${streamCount} substantive monitored message(s) require human assessment before any external action.`
         : `Monitoring in progress. No substantive indicator samples are ready for external briefing yet.`;
@@ -126,8 +134,8 @@ function buildRiskReview(session: InvestigationSession, language: LanguageId): R
   const summaryPt =
     indicators.length > 0
       ? streamCount > 0
-        ? `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${streamCount} mensagem(ns) substantiva(s) e ${tgNodes.length} sinal(is) mapeados.`
-        : `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${tgNodes.length} sinal(is) mapeados no grafo.`
+        ? `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${streamCount} mensagem(ns) substantiva(s) e ${graphSignalCount} sinal(is) mapeados.`
+        : `Revisão analítica recomendada. ${indicators.length} tipo(s) de indicador observados em ${graphSignalCount} sinal(is) mapeados no grafo.`
       : streamCount > 0
         ? `Revisão analítica recomendada. ${streamCount} mensagem(ns) monitorada(s) substantiva(s) requerem avaliação humana antes de qualquer ação externa.`
         : `Monitoramento em andamento. Ainda não há amostras substantivas prontas para brief externo.`;
@@ -136,7 +144,7 @@ function buildRiskReview(session: InvestigationSession, language: LanguageId): R
 
   return {
     score: hasEvidence
-      ? Math.min(92, 28 + indicators.length * 10 + Math.min(tgNodes.length, 6) * 4)
+      ? Math.min(92, 28 + indicators.length * 10 + Math.min(graphSignalCount, 6) * 4)
       : 0,
     confidence: indicators.length >= 2 ? "medium" : indicators.length === 1 ? "low" : "low",
     groomingIndicators: indicators,
@@ -163,7 +171,7 @@ export function generateCaseBrief(session: InvestigationSession, language: Langu
   const highlights = evidenceHighlights(session, language);
   const worthyCount = briefWorthyEvents(session).length;
 
-  const graphCount = graphTelegramNodes(session).length;
+  const graphCount = graphIndicatorNodeCount(session);
 
   const executiveSummaryEn =
     indicators.length > 0
