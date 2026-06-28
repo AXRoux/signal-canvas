@@ -75,6 +75,7 @@ export interface Translations {
   };
   brief: {
     preview: string;
+    executiveSummary: string;
     exportHint: string;
     exportPdf: string;
     exporting: string;
