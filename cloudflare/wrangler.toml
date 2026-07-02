@@ -11,5 +11,5 @@ binding = "RELEASES"
 bucket_name = "signal-canvas-releases"
 
 [vars]
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 HERMES_PUBLIC_URL = "https://signal-canvas.tethsiga.workers.dev/hermes"

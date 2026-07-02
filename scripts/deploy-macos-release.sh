@@ -26,7 +26,14 @@ if ! wrangler whoami >/dev/null 2>&1; then
 fi
 
 echo "→ Building signed + notarized macOS app (v${VERSION})..."
-npm run tauri build
+npm run tauri build || true
+
+APP_PATH="$ROOT/src-tauri/target/release/bundle/macos/Signal Canvas.app"
+if [[ ! -f "$DMG_PATH" && -d "$APP_PATH" ]]; then
+  echo "→ Tauri DMG bundling failed; creating DMG with hdiutil..."
+  rm -f "$DMG_PATH"
+  hdiutil create -volname "Signal Canvas" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH"
+fi
 
 if [[ ! -f "$DMG_PATH" ]]; then
   echo "Missing DMG: $DMG_PATH"
