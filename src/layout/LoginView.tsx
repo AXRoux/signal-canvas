@@ -97,8 +97,12 @@ export function LoginView() {
       ? await registerRemote(name, email, passcode)
       : await register(name, email, passcode, role);
     if (!result.ok) {
-      if (result.error === "exists") setError(copy.auth.errors.exists);
-      else setError(copy.auth.errors.validation);
+      if (result.error === "exists") {
+        setMode("login");
+        setError(copy.auth.errors.exists);
+      } else {
+        setError(copy.auth.errors.validation);
+      }
     }
   };
 

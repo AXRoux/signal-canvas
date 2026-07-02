@@ -37,6 +37,7 @@ data-key.enc
 
 # Telegram MTProto sessions
 scripts/telegram/.venv/
+scripts/.passcode-venv/
 scripts/telegram/**/*.session
 scripts/telegram/**/*.session-journal
 *.session

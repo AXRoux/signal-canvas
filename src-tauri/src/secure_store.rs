@@ -179,8 +179,39 @@ fn register_login_decrypt_keys(passcode: &str, email: &str, password_hash: &str)
     set_legacy_decrypt_keys(keys);
 }
 
-fn data_key_path() -> Result<PathBuf, String> {
+fn email_data_key_filename(email: &str) -> String {
+    let safe = email
+        .trim()
+        .to_lowercase()
+        .replace('@', "_at_")
+        .replace('.', "_");
+    format!("data-key.{safe}.enc")
+}
+
+fn data_key_path(email: &str) -> Result<PathBuf, String> {
+    Ok(signal_canvas_dir()?.join(email_data_key_filename(email)))
+}
+
+fn legacy_data_key_path() -> Result<PathBuf, String> {
     Ok(signal_canvas_dir()?.join(DATA_KEY_FILE))
+}
+
+fn read_data_key_from_file(path: &PathBuf, wrap_key: &[u8; 32]) -> Result<[u8; 32], String> {
+    let enc = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let bytes = decrypt_with_key(&enc, wrap_key)?;
+    if bytes.len() != 32 {
+        return Err("Invalid data key file".into());
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&bytes);
+    Ok(key)
+}
+
+fn write_data_key_file(path: &PathBuf, key: &[u8; 32], wrap_key: &[u8; 32]) -> Result<(), String> {
+    let enc = encrypt_with_key(key, wrap_key)?;
+    ensure_dir(path)?;
+    fs::write(path, enc).map_err(|e| e.to_string())?;
+    set_private_permissions(path)
 }
 
 fn unlock_account_data_key(
@@ -188,31 +219,29 @@ fn unlock_account_data_key(
     email: &str,
     password_hash: &str,
 ) -> Result<[u8; 32], String> {
-    let wrap_key = derive_passcode_wrap_key(passcode, email, password_hash)?;
-    let path = data_key_path()?;
+    let normalized = email.trim().to_lowercase();
+    let wrap_key = derive_passcode_wrap_key(passcode, &normalized, password_hash)?;
+    let path = data_key_path(&normalized)?;
 
     if path.exists() {
-        let enc = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let bytes = decrypt_with_key(&enc, &wrap_key)?;
-        if bytes.len() != 32 {
-            return Err("Invalid data key file".into());
+        return read_data_key_from_file(&path, &wrap_key).map_err(|_| "data_key_unlock".into());
+    }
+
+    let legacy_path = legacy_data_key_path()?;
+    if legacy_path.exists() {
+        if let Ok(key) = read_data_key_from_file(&legacy_path, &wrap_key) {
+            write_data_key_file(&path, &key, &wrap_key)?;
+            return Ok(key);
         }
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        return Ok(key);
     }
 
     let key_bytes = match get_or_create_master_key() {
         Ok(existing) => existing.to_vec(),
         Err(_) => random_bytes(32),
     };
-    let enc = encrypt_with_key(&key_bytes, &wrap_key)?;
-    ensure_dir(&path)?;
-    fs::write(&path, enc).map_err(|e| e.to_string())?;
-    set_private_permissions(&path)?;
-
     let mut key = [0u8; 32];
     key.copy_from_slice(&key_bytes);
+    write_data_key_file(&path, &key, &wrap_key)?;
     Ok(key)
 }
 
@@ -437,6 +466,9 @@ pub fn secure_auth_register(
         return Err("exists".into());
     }
 
+    let password_hash = hash_passcode(&passcode)?;
+    let data_key = unlock_account_data_key(&passcode, &normalized, &password_hash)?;
+
     let user = AuthUser {
         id: uuid::Uuid::new_v4().to_string(),
         name: trimmed_name.to_string(),
@@ -445,7 +477,6 @@ pub fn secure_auth_register(
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    let password_hash = hash_passcode(&passcode)?;
     auth.accounts.insert(
         normalized.clone(),
         StoredAccount {
@@ -456,7 +487,6 @@ pub fn secure_auth_register(
     save_auth_file(&auth)?;
 
     let token = uuid::Uuid::new_v4().to_string();
-    let data_key = unlock_account_data_key(&passcode, &normalized, &password_hash)?;
     register_login_decrypt_keys(&passcode, &normalized, &password_hash);
     set_session_data_key(Some(data_key));
     set_unlocked(true);
@@ -477,7 +507,8 @@ pub fn secure_auth_login(email: String, passcode: String) -> Result<AuthSession,
         return Err("invalid".into());
     }
 
-    let data_key = unlock_account_data_key(&passcode, &normalized, &account.password_hash)?;
+    let data_key = unlock_account_data_key(&passcode, &normalized, &account.password_hash)
+        .map_err(|e| if e == "data_key_unlock" { "invalid".into() } else { e })?;
     register_login_decrypt_keys(&passcode, &normalized, &account.password_hash);
     let token = uuid::Uuid::new_v4().to_string();
     set_session_data_key(Some(data_key));

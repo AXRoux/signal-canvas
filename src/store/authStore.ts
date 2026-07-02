@@ -199,6 +199,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "exists") return { ok: false, error: "exists" };
+      if (msg === "data_key_unlock") return { ok: false, error: "exists" };
       if (msg === "validation") return { ok: false, error: "validation" };
       return { ok: false, error: "validation" };
     }
